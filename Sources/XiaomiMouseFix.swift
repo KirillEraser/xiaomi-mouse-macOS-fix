@@ -93,11 +93,19 @@ let deviceRemovedCallback: IOHIDDeviceCallback = { context, _, _, _ in
 // ----------------------------------------------------------------------------
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    let hideIconDefaultsKey = "HideMenuBarIcon"
     var statusLine: NSMenuItem!
     var inputMonItem: NSMenuItem!
     var accessItem: NSMenuItem!
     var loginToggle: NSMenuItem!
+    var hideIconItem: NSMenuItem!
     var manager: IOHIDManager!
+    var settingsWindow: NSWindow?
+    var mouseStatusLabel: NSTextField?
+    var inputStatusLabel: NSTextField?
+    var accessibilityStatusLabel: NSTextField?
+    var loginCheckbox: NSButton?
+    var menuIconCheckbox: NSButton?
 
     let reportLength = 32
     lazy var reportBuffer: UnsafeMutablePointer<UInt8> = {
@@ -114,9 +122,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ensureInputMonitoringPermission()
         ensureAccessibilityPermission()
         setupHID()
+        applyMenuBarIconVisibility()
         updateUI()
         updatePermissionItems()
         updateLoginState()
+        showSettingsWindow()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettingsWindow()
+        return true
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        updateSettingsWindowState()
     }
 
     func buildMenu() {
@@ -142,7 +161,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginToggle = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         loginToggle.target = self
         menu.addItem(loginToggle)
+
+        hideIconItem = NSMenuItem(title: "Hide Menu Bar Icon", action: #selector(toggleMenuBarIcon), keyEquivalent: "")
+        hideIconItem.target = self
+        menu.addItem(hideIconItem)
         menu.addItem(.separator())
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(showSettingsWindow), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit XiaomiMouseFix", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -160,6 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.toolTip = connected ? "Mi Silent Mouse: connected" : "Mi Silent Mouse: not connected"
         }
         statusLine?.title = connected ? "Mouse: Connected ✓" : "Mouse: Not connected"
+        mouseStatusLabel?.stringValue = connected ? "Connected" : "Not connected"
     }
 
     // ---- Launch at login (modern ServiceManagement API, macOS 13+) ----
@@ -178,11 +206,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func updateLoginState() {
         loginToggle?.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
+        loginCheckbox?.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 
     func menuWillOpen(_ menu: NSMenu) {
         updatePermissionItems()
         updateLoginState()
+        updateMenuBarIconState()
+    }
+
+    // ---- Menu bar icon visibility ----
+    func applyMenuBarIconVisibility() {
+        statusItem.isVisible = !UserDefaults.standard.bool(forKey: hideIconDefaultsKey)
+        updateMenuBarIconState()
+    }
+
+    func updateMenuBarIconState() {
+        let hidden = UserDefaults.standard.bool(forKey: hideIconDefaultsKey)
+        hideIconItem?.state = hidden ? .on : .off
+        menuIconCheckbox?.state = hidden ? .off : .on
+    }
+
+    @objc func toggleMenuBarIcon() {
+        let hidden = UserDefaults.standard.bool(forKey: hideIconDefaultsKey)
+        UserDefaults.standard.set(!hidden, forKey: hideIconDefaultsKey)
+        applyMenuBarIconVisibility()
+    }
+
+    @objc func toggleMenuBarIconFromWindow(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state != .on, forKey: hideIconDefaultsKey)
+        applyMenuBarIconVisibility()
     }
 
     // ---- Permission status rows ----
@@ -201,6 +254,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let ax = accessibilityGranted()
         accessItem.title = ax ? "Accessibility: Granted" : "Accessibility: Not granted — open Settings"
         accessItem.state = ax ? .on : .off
+
+        inputStatusLabel?.stringValue = im ? "Granted" : "Not granted"
+        accessibilityStatusLabel?.stringValue = ax ? "Granted" : "Not granted"
     }
 
     @objc func openInputMonitoringSettings() {
@@ -215,6 +271,116 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func quit() { NSApp.terminate(nil) }
+
+    // ---- Settings window ----
+    @objc func showSettingsWindow() {
+        if let settingsWindow {
+            settingsWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            updateSettingsWindowState()
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 340),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "XiaomiMouseFix"
+        window.center()
+        window.isReleasedWhenClosed = false
+
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.alignment = .leading
+        root.spacing = 14
+        root.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+        root.translatesAutoresizingMaskIntoConstraints = false
+
+        let title = NSTextField(labelWithString: "XiaomiMouseFix")
+        title.font = .systemFont(ofSize: 22, weight: .semibold)
+
+        let creator = NSTextField(labelWithString: "Creator: KirillEraser")
+        creator.textColor = .secondaryLabelColor
+
+        let description = NSTextField(wrappingLabelWithString: "Fixes Back and Forward side buttons for the Xiaomi Mi Dual Mode Wireless Mouse by reading raw HID reports and posting standard mouse button events.")
+        description.textColor = .secondaryLabelColor
+
+        let statusBox = NSStackView()
+        statusBox.orientation = .vertical
+        statusBox.alignment = .leading
+        statusBox.spacing = 8
+
+        mouseStatusLabel = NSTextField(labelWithString: "")
+        inputStatusLabel = NSTextField(labelWithString: "")
+        accessibilityStatusLabel = NSTextField(labelWithString: "")
+
+        statusBox.addArrangedSubview(row(label: "Mouse", value: mouseStatusLabel!))
+        statusBox.addArrangedSubview(row(label: "Input Monitoring", value: inputStatusLabel!))
+        statusBox.addArrangedSubview(row(label: "Accessibility", value: accessibilityStatusLabel!))
+
+        loginCheckbox = NSButton(checkboxWithTitle: "Launch at Login", target: self, action: #selector(toggleLogin))
+        menuIconCheckbox = NSButton(checkboxWithTitle: "Show Menu Bar Icon", target: self, action: #selector(toggleMenuBarIconFromWindow(_:)))
+
+        let buttons = NSStackView()
+        buttons.orientation = .horizontal
+        buttons.spacing = 8
+
+        let inputButton = NSButton(title: "Input Monitoring", target: self, action: #selector(openInputMonitoringSettings))
+        let accessibilityButton = NSButton(title: "Accessibility", target: self, action: #selector(openAccessibilitySettings))
+        let quitButton = NSButton(title: "Quit", target: self, action: #selector(quit))
+        buttons.addArrangedSubview(inputButton)
+        buttons.addArrangedSubview(accessibilityButton)
+        buttons.addArrangedSubview(quitButton)
+
+        root.addArrangedSubview(title)
+        root.addArrangedSubview(creator)
+        root.addArrangedSubview(description)
+        root.addArrangedSubview(statusBox)
+        root.addArrangedSubview(loginCheckbox!)
+        root.addArrangedSubview(menuIconCheckbox!)
+        root.addArrangedSubview(buttons)
+
+        window.contentView = NSView()
+        window.contentView?.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor),
+            root.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
+            root.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor),
+            description.widthAnchor.constraint(equalToConstant: 360),
+        ])
+
+        settingsWindow = window
+        updateSettingsWindowState()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func row(label: String, value: NSTextField) -> NSStackView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 8
+
+        let labelField = NSTextField(labelWithString: "\(label):")
+        labelField.font = .systemFont(ofSize: 13, weight: .medium)
+        labelField.widthAnchor.constraint(equalToConstant: 130).isActive = true
+
+        value.textColor = .secondaryLabelColor
+
+        row.addArrangedSubview(labelField)
+        row.addArrangedSubview(value)
+        return row
+    }
+
+    func updateSettingsWindowState() {
+        updateUI()
+        updatePermissionItems()
+        updateLoginState()
+        updateMenuBarIconState()
+    }
 
     // ---- Permissions ----
     func ensureInputMonitoringPermission() {

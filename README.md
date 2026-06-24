@@ -9,8 +9,10 @@ A tiny **menu-bar app** that makes the **side buttons (Back/Forward) work over
 Bluetooth** on the **Xiaomi Mi Dual Mode Wireless Mouse — Silent Edition**
 (VID `0x2717`, PID `0x5014`) on macOS, including Apple Silicon.
 
-It lives in the menu bar and shows whether the mouse is connected, the live
-state of the two permissions it needs, a **Launch at Login** toggle, and **Quit**.
+It opens a small settings window on launch and can also live in the menu bar.
+The UI shows whether the mouse is connected, the live state of the two
+permissions it needs, a **Launch at Login** toggle, a **Hide Menu Bar Icon**
+toggle, and **Quit**.
 
 ## Tested on
 
@@ -59,7 +61,8 @@ make install
 ```
 
 This builds a signed `XiaomiMouseFix.app`, copies it to `/Applications`, and
-launches it. A mouse icon appears in the menu bar.
+launches it. The settings window opens, and a mouse icon appears in the menu
+bar unless you hide it.
 
 Then grant **both** permissions in **System Settings → Privacy & Security**:
 
@@ -80,6 +83,9 @@ To start it automatically at login, click the menu bar icon and enable
 - **Input Monitoring: Granted / Not granted** — click to open the Settings pane.
 - **Accessibility: Granted / Not granted** — click to open the Settings pane.
 - **Launch at Login** — toggles a login item via `SMAppService`.
+- **Hide Menu Bar Icon** — hides the menu bar item. Reopen the app to show the
+  settings window again and turn the icon back on.
+- **Settings…** — opens the settings window.
 - **Quit** — exits the app.
 
 ## Uninstall
