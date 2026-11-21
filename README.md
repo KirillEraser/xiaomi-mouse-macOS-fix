@@ -66,9 +66,10 @@ Then grant **both** permissions in **System Settings → Privacy & Security**:
 - **Input Monitoring** → enable `XiaomiMouseFix` (read the mouse's reports)
 - **Accessibility** → enable `XiaomiMouseFix` (post the synthetic clicks)
 
-The app prompts for Accessibility on first launch. After granting both, quit and
-reopen it from the menu bar icon (or run `make relaunch`). Test Back/Forward in a
-browser or Finder.
+The app asks for Accessibility first, then for Input Monitoring once
+Accessibility is granted. If the buttons don't work right after granting both,
+quit and reopen it from the menu bar icon. Test Back/Forward in a browser or
+Finder.
 
 To start it automatically at login, click the menu bar icon and enable
 **Launch at Login**.
