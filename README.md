@@ -5,131 +5,141 @@
 ![Swift](https://img.shields.io/badge/Swift-5-orange?logo=swift&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A tiny **menu-bar app** that makes the **side buttons (Back/Forward) work over
-Bluetooth** on the **Xiaomi Mi Dual Mode Wireless Mouse — Silent Edition**
-(VID `0x2717`, PID `0x5014`) on macOS, including Apple Silicon.
+A tiny menu-bar app that makes the **Back/Forward side buttons** work on the
+**Xiaomi Mi Dual Mode Wireless Mouse — Silent Edition** over **Bluetooth** on
+macOS. (Over the USB dongle macOS already sees the side buttons, so you don't
+need this app; they work in browsers, but Apple's apps ignore them.)
 
-It lives in the menu bar and shows whether the mouse is connected, the live
-state of the two permissions it needs, a **Launch at Login** toggle, and **Quit**.
-
-## Tested on
-
-- **MacBook Pro (M4 Pro)** — confirmed working.
-- **[Mi Dual Mode Wireless Mouse — Silent Edition](https://www.mi.com/global/product/mi-dual-mode-wireless-mouse/)**
-  (this exact mouse).
-
-No guarantees on other Macs or other mice. Different mice — or even a different
-firmware revision of this one — may report a different HID layout; in that case
-run `make sniff` and adjust the three byte/bit constants (see below).
-
-## The problem
-
-This mouse ships a broken HID report descriptor. Over Bluetooth it tells macOS
-it only has 3 buttons, so the side buttons do nothing. Over the USB dongle the
-buttons fire but get mapped to garbage (middle-click / wheel-tilt). Linux fixes
-this in the kernel by rewriting the descriptor
-([`hid-xiaomi.c`](https://github.com/torvalds/linux/blob/master/drivers/hid/hid-xiaomi.c),
-by Ilya Skriblovsky), but macOS has no equivalent fixup hook for a
-Bluetooth-transport HID device — the system Bluetooth HID driver claims the
-device before anything else can touch its descriptor.
-
-## How it works
-
-The side-button bits **are** present in every input report on the wire — the
-broken descriptor just tells macOS to ignore them. So this app skips the
-descriptor problem entirely:
-
-1. Opens the mouse via `IOHIDManager` (no seize — macOS keeps handling
-   movement and normal clicks).
-2. Registers a **raw input-report callback** and reads the button byte directly.
-3. On a side-button press, synthesizes a `otherMouseButton` 3/4 event, which
-   apps interpret as Back/Forward.
-
-No kext, no DriverKit, no SIP changes, no descriptor surgery.
-
-## Requirements
-
-- macOS 13+ (uses the modern `SMAppService` login-item API)
-- Xcode Command Line Tools (`xcode-select --install`) for `swiftc`
+Tested on a MacBook Pro (M4 Pro) with the
+[Silent Edition](https://www.mi.com/global/product/mi-dual-mode-wireless-mouse/)
+(VID `0x2717`, PID `0x5014`). Other mice or firmware revisions may need
+[a small tweak](#buttons-still-do-nothing).
 
 ## Install
 
+1. Download the `.dmg` from the
+   [latest release](https://github.com/KirillEraser/xiaomi-mouse-macOS-fix/releases/latest).
+2. Open it and drag **XiaomiMouseFix** into **Applications**.
+3. Launch it. macOS will block it the first time, because the app isn't
+   notarized (that needs a paid Apple developer account):
+   - Go to **System Settings → Privacy & Security**, scroll down and click
+     **Open Anyway**. (On macOS 13–14 you can also right-click the app → **Open**.)
+   - If macOS says the app is **"damaged"**, run this once, then open it normally:
+     ```sh
+     xattr -dr com.apple.quarantine /Applications/XiaomiMouseFix.app
+     ```
+
+A mouse icon appears in the menu bar.
+
+## Permissions
+
+The app asks for two permissions, one at a time. Both are in
+**System Settings → Privacy & Security**:
+
+1. **Accessibility** (called **Device Control and Data Access** on newer
+   macOS) — to send the Back/Forward clicks.
+2. **Input Monitoring** — to read the mouse's buttons.
+
+If the buttons don't work right after granting both, quit and reopen the app
+from the menu bar icon. The menu shows whether the mouse is connected and
+whether each permission is granted. To start the app automatically, enable
+**Launch at Login** in the menu.
+
+## What works where
+
+- **Apple's apps** (Finder, Safari, System Settings, App Store, Music, Preview…)
+  ignore mouse side buttons, so the app sends **⌘[ / ⌘]** to them instead.
+  Apple apps where ⌘[ means something else (Xcode, Notes, Mail, Pages…) are
+  left alone.
+- **Browsers** (Chrome, Firefox, Arc, Zen…) and most other apps get normal
+  Back/Forward mouse buttons. Apps that ignore those won't react.
+
+## Troubleshooting
+
+### Permission switches are on, but the buttons do nothing
+
+macOS ties permissions to the exact build of the app, so after an update or
+rebuild the old switches look enabled but don't apply. Reset them, reopen the
+app and grant again:
+
 ```sh
-make install
+tccutil reset Accessibility space.roverprinter.xiaomimousefix
+tccutil reset ListenEvent space.roverprinter.xiaomimousefix
 ```
 
-This builds a signed `XiaomiMouseFix.app`, copies it to `/Applications`, and
-launches it. A mouse icon appears in the menu bar.
+### Buttons still do nothing
 
-Then grant **both** permissions in **System Settings → Privacy & Security**:
-
-- **Input Monitoring** → enable `XiaomiMouseFix` (read the mouse's reports)
-- **Accessibility** → enable `XiaomiMouseFix` (post the synthetic clicks)
-
-The app asks for Accessibility first, then for Input Monitoring once
-Accessibility is granted. If the buttons don't work right after granting both,
-quit and reopen it from the menu bar icon. Test Back/Forward in a browser or
-Finder.
-
-To start it automatically at login, click the menu bar icon and enable
-**Launch at Login**.
-
-## Menu
-
-- **Mouse: Connected ✓ / Not connected** — live status (the icon also fills in
-  when connected).
-- **Input Monitoring: Granted / Not granted** — click to open the Settings pane.
-- **Accessibility: Granted / Not granted** — click to open the Settings pane.
-- **Launch at Login** — toggles a login item via `SMAppService`.
-- **Quit** — exits the app.
-
-## Uninstall
-
-Turn off **Launch at Login** from the menu, then:
-
-```sh
-make uninstall
-```
-
-## Other commands
-
-| Command         | What it does                                           |
-| --------------- | ------------------------------------------------------ |
-| `make run`      | Run the bundle in the foreground (testing)             |
-| `make sniff`    | Print raw HID reports to discover your byte/bit layout |
-| `make relaunch` | Rebuild, reinstall, relaunch (after code changes)      |
-| `make clean`    | Remove the build directory                             |
-
-## Different firmware revision?
-
-If your buttons don't respond, your report layout may differ. Run:
+Your mouse may report its buttons differently. Build from source (below) and run:
 
 ```sh
 make sniff
 ```
 
-Press each side button and note which byte/bit toggles, then edit the three
-constants near the top of `Sources/XiaomiMouseFix.swift`
-(`BUTTON_BYTE_INDEX`, `BACK_BIT`, `FORWARD_BIT`) and reinstall. If Back and
-Forward are swapped, just swap `BACK_BIT` and `FORWARD_BIT`.
+Press each side button and note which byte/bit changes, then edit
+`BUTTON_BYTE_INDEX`, `BACK_BIT` and `FORWARD_BIT` near the top of
+`Sources/XiaomiMouseFix.swift` and reinstall. If Back and Forward are swapped,
+swap `BACK_BIT` and `FORWARD_BIT`. (Silent Edition over Bluetooth: byte 1,
+`0x08` = Back, `0x10` = Forward.)
 
-Confirmed layout for the Silent Edition over Bluetooth: report ID at byte 0,
-button bitfield at byte 1, with `0x08` = Back and `0x10` = Forward.
+### Hiding the menu bar icon
 
-## Notes
+On macOS 26+: **System Settings → Menu Bar → Allow in the Menu Bar**. On older
+versions, use [Ice](https://github.com/jordanbaird/Ice).
 
-- Apple's own apps (Finder, Safari, System Settings, App Store, Music, …)
-  ignore mouse buttons 3/4, so for them the app sends ⌘[ / ⌘] instead. Apple
-  apps where ⌘[ means something else (Xcode, Notes, Mail, Pages…) are skipped.
-- Third-party apps get mouse buttons 3/4. Browsers handle them; apps that
-  ignore them won't react.
-- Permissions are tied to the app's signature/bundle ID. The `.app` bundle keeps
-  that identity stable across rebuilds, so you grant the permissions once.
+## Updating and uninstalling
+
+**Update:** quit the app from the menu, replace it in Applications with the new
+version, then [reset the permissions](#permission-switches-are-on-but-the-buttons-do-nothing)
+and grant them again.
+
+**Uninstall:** turn off **Launch at Login**, quit the app and drag it to the
+Trash. To also clear its permission entries, run the two `tccutil` commands above.
+
+## Build from source
+
+Needs macOS 13+ and the Xcode Command Line Tools (`xcode-select --install`).
+
+```sh
+git clone https://github.com/KirillEraser/xiaomi-mouse-macOS-fix.git
+cd xiaomi-mouse-macOS-fix
+make install
+```
+
+| Command          | What it does                                     |
+| ---------------- | ------------------------------------------------ |
+| `make install`   | Build, copy to `/Applications`, launch           |
+| `make relaunch`  | Same, after code changes                         |
+| `make run`       | Run the build in the foreground (testing)        |
+| `make sniff`     | Print raw HID reports to find the button layout  |
+| `make uninstall` | Remove the app from `/Applications`              |
+| `make clean`     | Remove the build folder                          |
+
+Local builds are signed ad-hoc, so **every rebuild needs the permissions
+re-granted** (see the `tccutil` commands above).
+
+## How it works
+
+Over Bluetooth, the mouse sends a broken HID report descriptor that tells macOS
+it only has 3 buttons, so the side buttons are ignored. (The USB dongle reports
+them correctly.) Linux fixes this in the
+kernel by rewriting the descriptor
+([`hid-xiaomi.c`](https://github.com/torvalds/linux/blob/master/drivers/hid/hid-xiaomi.c)),
+but macOS has no hook for that on Bluetooth devices.
+
+The side-button bits are still there in every report, though. So the app:
+
+1. Opens the mouse with `IOHIDManager` without seizing it, so macOS keeps
+   handling movement and normal clicks.
+2. Reads the raw button byte from each input report.
+3. On a side-button press, posts mouse button 4/5 — or ⌘[ / ⌘] if an Apple
+   app is in front.
+
+No kext, no DriverKit, no SIP changes.
 
 ## Credits
 
-- HID descriptor analysis and the original Linux driver: Ilya Skriblovsky
-  ([hid-xiaomi](https://github.com/IlyaSkriblovsky/hid-xiaomi), now in mainline).
+HID descriptor analysis and the original Linux driver: Ilya Skriblovsky
+([hid-xiaomi](https://github.com/IlyaSkriblovsky/hid-xiaomi), now in mainline).
 
 ## License
 
