@@ -117,9 +117,10 @@ button bitfield at byte 1, with `0x08` = Back and `0x10` = Forward.
 
 ## Notes
 
-- Apps that only respond to swipe navigation (not mouse button 3/4) won't react.
-  Most browsers and Finder handle button 3/4 fine. To support a stubborn app,
-  post a keyboard shortcut instead — swap out `postMouseButton`.
+- Most apps (Chrome, Firefox, …) handle mouse buttons 3/4 as Back/Forward.
+  Finder and Safari ignore them, so for those the app sends ⌘[ / ⌘] instead.
+  To add another stubborn app, put its bundle ID in `kShortcutApps` in
+  `Sources/XiaomiMouseFix.swift`.
 - Permissions are tied to the app's signature/bundle ID. The `.app` bundle keeps
   that identity stable across rebuilds, so you grant the permissions once.
 

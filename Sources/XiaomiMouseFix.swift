@@ -58,6 +58,36 @@ func postMouseButton(_ buttonNumber: Int) {
 }
 
 // ----------------------------------------------------------------------------
+// Some apps (Finder, Safari) ignore mouse buttons 3/4 but understand
+// ⌘[ / ⌘] as Back/Forward. For those, send the shortcut instead (issue #1).
+// Not global: in editors (VS Code, Xcode…) ⌘[ means "outdent".
+// ----------------------------------------------------------------------------
+let kShortcutApps: Set<String> = ["com.apple.finder", "com.apple.Safari"]
+
+// ANSI virtual key codes (physical key positions, US layout)
+let kKeyLeftBracket:  CGKeyCode = 33   // '['
+let kKeyRightBracket: CGKeyCode = 30   // ']'
+
+func postCommandShortcut(_ keyCode: CGKeyCode) {
+    let src = CGEventSource(stateID: .hidSystemState)
+    for isDown in [true, false] {
+        if let ev = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: isDown) {
+            ev.flags = .maskCommand
+            ev.post(tap: .cghidEventTap)
+        }
+    }
+}
+
+func postBackForward(_ buttonNumber: Int) {
+    let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+    if kShortcutApps.contains(frontApp) {
+        postCommandShortcut(buttonNumber == kBackButtonNumber ? kKeyLeftBracket : kKeyRightBracket)
+    } else {
+        postMouseButton(buttonNumber)
+    }
+}
+
+// ----------------------------------------------------------------------------
 // HID C callbacks. They can't capture Swift context, so the AppDelegate is
 // passed through the `context` pointer.
 // ----------------------------------------------------------------------------
@@ -69,8 +99,8 @@ let inputReportCallback: IOHIDReportCallback = { context, _, _, _, _, report, re
 
     let buttons = report[BUTTON_BYTE_INDEX]
     let changed = buttons ^ app.lastButtons
-    if (changed & BACK_BIT) != 0,    (buttons & BACK_BIT) != 0    { NSLog("XMF: Back detected -> posting button 3");    postMouseButton(kBackButtonNumber) }
-    if (changed & FORWARD_BIT) != 0, (buttons & FORWARD_BIT) != 0 { NSLog("XMF: Forward detected -> posting button 4"); postMouseButton(kForwardButtonNumber) }
+    if (changed & BACK_BIT) != 0,    (buttons & BACK_BIT) != 0    { postBackForward(kBackButtonNumber) }
+    if (changed & FORWARD_BIT) != 0, (buttons & FORWARD_BIT) != 0 { postBackForward(kForwardButtonNumber) }
     app.lastButtons = buttons
 }
 
