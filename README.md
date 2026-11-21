@@ -118,18 +118,11 @@ button bitfield at byte 1, with `0x08` = Back and `0x10` = Forward.
 
 ## Notes
 
-- Most apps (Chrome, Firefox, …) handle mouse buttons 3/4 as Back/Forward.
-  Many Apple apps (Finder, Safari, System Settings, App Store, Music, …)
-  ignore them, so for those the app sends ⌘[ / ⌘] instead. To add another app
-  that ignores the side buttons but has ⌘[ / ⌘] for Back/Forward:
-
-  ```sh
-  osascript -e 'id of app "Some App"'   # get its bundle ID
-  defaults write space.roverprinter.xiaomimousefix ShortcutApps -array-add com.example.someapp
-  ```
-
-  Takes effect immediately. Don't add apps where ⌘[ means something else
-  (code editors use it for outdent).
+- Apple's own apps (Finder, Safari, System Settings, App Store, Music, …)
+  ignore mouse buttons 3/4, so for them the app sends ⌘[ / ⌘] instead. Apple
+  apps where ⌘[ means something else (Xcode, Notes, Mail, Pages…) are skipped.
+- Third-party apps get mouse buttons 3/4. Browsers handle them; apps that
+  ignore them won't react.
 - Permissions are tied to the app's signature/bundle ID. The `.app` bundle keeps
   that identity stable across rebuilds, so you grant the permissions once.
 
