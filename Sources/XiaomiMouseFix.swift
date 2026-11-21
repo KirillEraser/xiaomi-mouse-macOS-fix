@@ -139,14 +139,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var deviceCount = 0
     var connected = false { didSet { updateUI() } }
 
+    var permissionTimer: Timer?
+    var askedInputMonitoring = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
-        ensureInputMonitoringPermission()
-        ensureAccessibilityPermission()
-        setupHID()
         updateUI()
-        updatePermissionItems()
         updateLoginState()
+
+        // Ask for Accessibility first: it takes effect without a relaunch.
+        // Input Monitoring is requested only after that (macOS may ask to
+        // quit & reopen for it), see checkPermissions().
+        if !accessibilityGranted() { ensureAccessibilityPermission() }
+        checkPermissions()
+        if !(accessibilityGranted() && inputMonitoringGranted()) {
+            permissionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                self?.checkPermissions()
+            }
+        }
+    }
+
+    // Runs once at launch, then every second until both permissions are granted.
+    func checkPermissions() {
+        updatePermissionItems()
+        if accessibilityGranted() && !inputMonitoringGranted() && !askedInputMonitoring {
+            askedInputMonitoring = true
+            ensureInputMonitoringPermission()
+        }
+        // Open the HID manager only once allowed, so it can't trigger the
+        // Input Monitoring prompt before the Accessibility one.
+        if inputMonitoringGranted() && manager == nil { setupHID() }
+        if accessibilityGranted() && inputMonitoringGranted() {
+            permissionTimer?.invalidate()
+            permissionTimer = nil
+        }
     }
 
     func buildMenu() {
