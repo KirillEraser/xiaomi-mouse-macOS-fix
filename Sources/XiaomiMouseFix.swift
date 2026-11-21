@@ -58,11 +58,27 @@ func postMouseButton(_ buttonNumber: Int) {
 }
 
 // ----------------------------------------------------------------------------
-// Some apps (Finder, Safari) ignore mouse buttons 3/4 but understand
-// ⌘[ / ⌘] as Back/Forward. For those, send the shortcut instead (issue #1).
+// Many Apple apps ignore mouse buttons 3/4 but understand ⌘[ / ⌘] as
+// Back/Forward. For those, send the shortcut instead (issue #1).
 // Not global: in editors (VS Code, Xcode…) ⌘[ means "outdent".
+//
+// Add more apps without rebuilding:
+//   defaults write space.roverprinter.xiaomimousefix ShortcutApps -array-add <bundle id>
 // ----------------------------------------------------------------------------
-let kShortcutApps: Set<String> = ["com.apple.finder", "com.apple.Safari"]
+let kDefaultShortcutApps: Set<String> = [
+    "com.apple.finder",
+    "com.apple.Safari",
+    "com.apple.systempreferences",   // System Settings
+    "com.apple.AppStore",
+    "com.apple.Music",
+    "com.apple.TV",
+    "com.apple.podcasts",
+    "com.apple.iBooksX",             // Books
+]
+
+func shortcutApps() -> Set<String> {
+    kDefaultShortcutApps.union(UserDefaults.standard.stringArray(forKey: "ShortcutApps") ?? [])
+}
 
 // ANSI virtual key codes (physical key positions, US layout)
 let kKeyLeftBracket:  CGKeyCode = 33   // '['
@@ -80,7 +96,7 @@ func postCommandShortcut(_ keyCode: CGKeyCode) {
 
 func postBackForward(_ buttonNumber: Int) {
     let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-    if kShortcutApps.contains(frontApp) {
+    if shortcutApps().contains(frontApp) {
         postCommandShortcut(buttonNumber == kBackButtonNumber ? kKeyLeftBracket : kKeyRightBracket)
     } else {
         postMouseButton(buttonNumber)
