@@ -58,26 +58,34 @@ func postMouseButton(_ buttonNumber: Int) {
 }
 
 // ----------------------------------------------------------------------------
-// Many Apple apps ignore mouse buttons 3/4 but understand ⌘[ / ⌘] as
-// Back/Forward. For those, send the shortcut instead (issue #1).
-// Not global: in editors (VS Code, Xcode…) ⌘[ means "outdent".
+// Apple's own apps (Finder, Safari, System Settings, App Store, Music…) ignore
+// mouse buttons 3/4 but use ⌘[ / ⌘] for Back/Forward, so every com.apple.*
+// app gets the shortcut instead (issue #1). Third-party apps keep getting
+// mouse buttons 3/4, which browsers etc. already handle.
 //
-// Add more apps without rebuilding:
-//   defaults write space.roverprinter.xiaomimousefix ShortcutApps -array-add <bundle id>
+// Exception: Apple apps where ⌘[ / ⌘] means something else (indent, shift
+// left, arrange…). Those get mouse buttons 3/4 like everything else.
 // ----------------------------------------------------------------------------
-let kDefaultShortcutApps: Set<String> = [
-    "com.apple.finder",
-    "com.apple.Safari",
-    "com.apple.systempreferences",   // System Settings
-    "com.apple.AppStore",
-    "com.apple.Music",
-    "com.apple.TV",
-    "com.apple.podcasts",
-    "com.apple.iBooksX",             // Books
+let kAppleAppsWithoutBackShortcut: Set<String> = [
+    "com.apple.dt.Xcode",
+    "com.apple.Terminal",
+    "com.apple.TextEdit",
+    "com.apple.Notes",
+    "com.apple.mail",
+    "com.apple.ScriptEditor2",
+    "com.apple.iWork.Pages",
+    "com.apple.iWork.Keynote",
+    "com.apple.iWork.Numbers",
+    "com.apple.freeform",
+    "com.apple.FinalCut",
+    "com.apple.logic10",
+    "com.apple.garageband10",
+    "com.apple.iMovieApp",
+    "com.apple.motionapp",
 ]
 
-func shortcutApps() -> Set<String> {
-    kDefaultShortcutApps.union(UserDefaults.standard.stringArray(forKey: "ShortcutApps") ?? [])
+func usesBackShortcut(_ bundleID: String) -> Bool {
+    bundleID.hasPrefix("com.apple.") && !kAppleAppsWithoutBackShortcut.contains(bundleID)
 }
 
 // ANSI virtual key codes (physical key positions, US layout)
@@ -96,7 +104,7 @@ func postCommandShortcut(_ keyCode: CGKeyCode) {
 
 func postBackForward(_ buttonNumber: Int) {
     let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-    if shortcutApps().contains(frontApp) {
+    if usesBackShortcut(frontApp) {
         postCommandShortcut(buttonNumber == kBackButtonNumber ? kKeyLeftBracket : kKeyRightBracket)
     } else {
         postMouseButton(buttonNumber)
