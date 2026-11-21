@@ -24,9 +24,11 @@ build:
 
 ## Assemble the .app bundle and ad-hoc sign it (stable TCC identity)
 app: build
+	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(APP_MACOS)
 	@mkdir -p $(APP_BUNDLE)/Contents/Resources
 	@cp $(BUILD_DIR)/$(BIN_NAME) $(APP_MACOS)/$(BIN_NAME)
+	@chmod +x $(APP_MACOS)/$(BIN_NAME)
 	@cp Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	@cp Resources/AppIcon.icns $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
 	@codesign -s - -f --deep $(APP_BUNDLE)
@@ -35,6 +37,7 @@ app: build
 ## Install to /Applications and launch
 install: app
 	-@killall $(BIN_NAME) 2>/dev/null || true
+	@while pgrep -x $(BIN_NAME) >/dev/null; do sleep 0.1; done
 	@rm -rf $(INSTALL_DIR)
 	@cp -R $(APP_BUNDLE) /Applications/
 	@open $(INSTALL_DIR)
