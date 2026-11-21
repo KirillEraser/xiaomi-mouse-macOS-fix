@@ -119,9 +119,17 @@ button bitfield at byte 1, with `0x08` = Back and `0x10` = Forward.
 ## Notes
 
 - Most apps (Chrome, Firefox, …) handle mouse buttons 3/4 as Back/Forward.
-  Finder and Safari ignore them, so for those the app sends ⌘[ / ⌘] instead.
-  To add another stubborn app, put its bundle ID in `kShortcutApps` in
-  `Sources/XiaomiMouseFix.swift`.
+  Many Apple apps (Finder, Safari, System Settings, App Store, Music, …)
+  ignore them, so for those the app sends ⌘[ / ⌘] instead. To add another app
+  that ignores the side buttons but has ⌘[ / ⌘] for Back/Forward:
+
+  ```sh
+  osascript -e 'id of app "Some App"'   # get its bundle ID
+  defaults write space.roverprinter.xiaomimousefix ShortcutApps -array-add com.example.someapp
+  ```
+
+  Takes effect immediately. Don't add apps where ⌘[ means something else
+  (code editors use it for outdent).
 - Permissions are tied to the app's signature/bundle ID. The `.app` bundle keeps
   that identity stable across rebuilds, so you grant the permissions once.
 
